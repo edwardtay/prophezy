@@ -13,7 +13,7 @@ export const privyConfig = {
     // Appearance - updated to light theme to match app design
     appearance: {
       theme: 'light' as const,
-      accentColor: '#6366F1',
+      accentColor: '#4C6FFF' as const,
       logo: '/favicon.svg',
     },
     
