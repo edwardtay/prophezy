@@ -1,19 +1,17 @@
 import { Router } from "express";
 import { db } from "../db";
 import axios from "axios";
-import { resolveMarketWithRedstoneOnChain, getRedstonePrice } from "../services/redstone";
-import { ethers } from "ethers";
 
 const router = Router();
 
-// Resolve market using Chainlink or Redstone oracle
+// Resolve market using Chainlink oracle
 router.post("/resolve/:marketId", async (req, res) => {
   try {
     const { marketId } = req.params;
     const { oracleType, dataFeedId, threshold, onChain } = req.body;
 
-    if (!oracleType || (oracleType !== "redstone" && oracleType !== "chainlink")) {
-      return res.status(400).json({ error: "oracleType must be 'redstone' or 'chainlink'" });
+    if (!oracleType || oracleType !== "chainlink") {
+      return res.status(400).json({ error: "oracleType must be 'chainlink'" });
     }
 
     if (!threshold) {
@@ -32,72 +30,7 @@ router.post("/resolve/:marketId", async (req, res) => {
 
     const market = marketResult.rows[0];
 
-    // If onChain flag is set and oracleType is redstone, resolve on-chain
-    if (onChain && oracleType === "redstone") {
-      try {
-        // Get contract addresses from environment
-        const rpcUrl = process.env.BNB_CHAIN_RPC_URL || "https://data-seed-prebsc-1-s1.binance.org:8545";
-        const privateKey = process.env.PRIVATE_KEY || "";
-        const predictionMarketAddress = process.env.PREDICTION_MARKET_ADDRESS || "";
-
-        if (!privateKey || !predictionMarketAddress) {
-          return res.status(500).json({ 
-            error: "Missing configuration",
-            details: "PRIVATE_KEY and PREDICTION_MARKET_ADDRESS must be set for on-chain resolution"
-          });
-        }
-
-        // Load contract ABI (simplified - in production, load from artifacts)
-        const predictionMarketAbi = [
-          "function resolveMarketFast(uint256 marketId, bytes32 dataFeedId) external",
-          "function marketOracleType(uint256) external view returns (uint8)",
-          "function marketValueThreshold(uint256) external view returns (uint256)",
-        ];
-
-        // Resolve on-chain
-        const result = await resolveMarketWithRedstoneOnChain(
-          rpcUrl,
-          privateKey,
-          predictionMarketAddress,
-          predictionMarketAbi,
-          parseInt(marketId),
-          dataFeedId,
-          parseFloat(threshold)
-        );
-
-        // Store resolution in database
-        const outcome = result.price >= parseFloat(threshold) ? 1 : 2;
-        await db.query(
-          `INSERT INTO oracle_resolutions (market_id, outcome, confidence_score, resolved_by, tx_hash)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [marketId, outcome, 0.95, "redstone-onchain", result.txHash]
-        );
-
-        // Update market status
-        await db.query(
-          "UPDATE markets SET status = 'resolved', outcome = $1 WHERE market_id = $2",
-          [outcome, marketId]
-        );
-
-        return res.json({
-          success: true,
-          marketId: parseInt(marketId),
-          outcome: outcome,
-          value: result.price,
-          threshold: parseFloat(threshold),
-          oracleType: "redstone",
-          confidence: 0.95,
-          timestamp: new Date().toISOString(),
-          txHash: result.txHash,
-          onChain: true,
-        });
-      } catch (error: any) {
-        console.error("On-chain resolution error:", error);
-        // Fall through to off-chain resolution
-      }
-    }
-
-    // Off-chain resolution (existing flow)
+    // Off-chain resolution
     // Call oracle service
     const oracleResponse = await axios.post(
       `${process.env.ORACLE_SERVICE_URL || "http://localhost:8000"}/resolve`,
@@ -183,14 +116,6 @@ router.get("/metrics", async (req, res) => {
     const totalResolutions = parseInt(totalResolutionsResult.rows[0].count);
 
     // Get resolutions by oracle type
-    const redstoneResolutionsResult = await db.query(
-      `SELECT COUNT(*) as count FROM oracle_resolutions or 
-       ${timeFilter ? timeFilter + " AND" : "WHERE"} 
-       (or.resolved_by LIKE '%redstone%' OR or.resolved_by LIKE '%Redstone%')`,
-      params
-    );
-    const redstoneResolutions = parseInt(redstoneResolutionsResult.rows[0].count);
-
     const chainlinkResolutionsResult = await db.query(
       `SELECT COUNT(*) as count FROM oracle_resolutions or 
        ${timeFilter ? timeFilter + " AND" : "WHERE"} 
@@ -240,9 +165,7 @@ router.get("/metrics", async (req, res) => {
     const timeSeriesResult = await db.query(
       `SELECT 
          DATE_TRUNC('hour', or.resolved_at) as hour,
-         COUNT(*) FILTER (WHERE or.resolved_by LIKE '%redstone%' OR or.resolved_by LIKE '%Redstone%') as redstone_count,
          COUNT(*) FILTER (WHERE or.resolved_by LIKE '%chainlink%' OR or.resolved_by LIKE '%Chainlink%') as chainlink_count,
-         AVG(EXTRACT(EPOCH FROM (or.resolved_at - m.end_time)) / 60) FILTER (WHERE or.resolved_by LIKE '%redstone%' OR or.resolved_by LIKE '%Redstone%') as redstone_avg_minutes,
          AVG(EXTRACT(EPOCH FROM (or.resolved_at - m.end_time)) / 60) FILTER (WHERE or.resolved_by LIKE '%chainlink%' OR or.resolved_by LIKE '%Chainlink%') as chainlink_avg_minutes
        FROM oracle_resolutions or
        LEFT JOIN markets m ON or.market_id = m.market_id
@@ -254,31 +177,9 @@ router.get("/metrics", async (req, res) => {
     // Format time series data
     const resolutionData = timeSeriesResult.rows.map(row => ({
       time: new Date(row.hour).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-      redstone: row.redstone_avg_minutes ? Math.round(parseFloat(row.redstone_avg_minutes)) : 15,
       chainlink: row.chainlink_avg_minutes ? Math.round(parseFloat(row.chainlink_avg_minutes)) : 1440,
       uma: 2880, // UMA baseline
     }));
-
-    // Get Redstone-specific metrics
-    const redstoneMetricsQuery = timeFilter
-      ? `SELECT 
-           AVG(EXTRACT(EPOCH FROM (or.resolved_at - m.end_time)) / 60) as avg_minutes,
-           AVG(confidence_score) as avg_confidence,
-           COUNT(*) as count
-         FROM oracle_resolutions or
-         JOIN markets m ON or.market_id = m.market_id
-         WHERE (or.resolved_by LIKE '%redstone%' OR or.resolved_by LIKE '%Redstone%')
-         ${timeFilter}`
-      : `SELECT 
-           AVG(EXTRACT(EPOCH FROM (or.resolved_at - m.end_time)) / 60) as avg_minutes,
-           AVG(confidence_score) as avg_confidence,
-           COUNT(*) as count
-         FROM oracle_resolutions or
-         JOIN markets m ON or.market_id = m.market_id
-         WHERE (or.resolved_by LIKE '%redstone%' OR or.resolved_by LIKE '%Redstone%')`;
-    const redstoneMetricsResult = await db.query(redstoneMetricsQuery, params);
-
-    const redstoneMetrics = redstoneMetricsResult.rows[0];
 
     // Get Chainlink-specific metrics
     const chainlinkMetricsQuery = timeFilter
@@ -303,19 +204,12 @@ router.get("/metrics", async (req, res) => {
 
     res.json({
       metrics: {
-        avgResolutionTime: avgResolutionTime || 15,
+        avgResolutionTime: avgResolutionTime || 1440,
         totalResolutions,
-        redstoneResolutions,
         chainlinkResolutions,
         disputeCount: 0, // TODO: Add disputes table
         avgConfidence: Math.round(avgConfidence * 100) / 100,
         totalVolume,
-      },
-      redstoneMetrics: {
-        avgResolutionTime: redstoneMetrics?.avg_minutes ? Math.round(parseFloat(redstoneMetrics.avg_minutes)) : 15,
-        successRate: redstoneResolutions > 0 ? 98.5 : 0,
-        marketsResolved: redstoneResolutions,
-        avgConfidence: redstoneMetrics?.avg_confidence ? Math.round(parseFloat(redstoneMetrics.avg_confidence) * 100) / 100 : 0.95,
       },
       chainlinkMetrics: {
         avgResolutionTime: chainlinkMetrics?.avg_minutes ? Math.round(parseFloat(chainlinkMetrics.avg_minutes)) : 1440,
@@ -324,10 +218,10 @@ router.get("/metrics", async (req, res) => {
         avgConfidence: chainlinkMetrics?.avg_confidence ? Math.round(parseFloat(chainlinkMetrics.avg_confidence) * 100) / 100 : 0.99,
       },
       resolutionData: resolutionData.length > 0 ? resolutionData : [
-        { time: "00:00", redstone: 15, chainlink: 1440, uma: 2880 },
-        { time: "06:00", redstone: 15, chainlink: 1440, uma: 2880 },
-        { time: "12:00", redstone: 15, chainlink: 1440, uma: 2880 },
-        { time: "18:00", redstone: 15, chainlink: 1440, uma: 2880 },
+        { time: "00:00", chainlink: 1440, uma: 2880 },
+        { time: "06:00", chainlink: 1440, uma: 2880 },
+        { time: "12:00", chainlink: 1440, uma: 2880 },
+        { time: "18:00", chainlink: 1440, uma: 2880 },
       ],
     });
   } catch (error: any) {

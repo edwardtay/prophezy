@@ -11,7 +11,7 @@ const createMarketSchema = z.object({
   duration: z.number().positive(),
   resolutionDelay: z.number().positive(),
   imageUrl: z.string().nullable().optional(),
-  oracleType: z.enum(["redstone", "chainlink", "uma"]).optional().default("redstone"),
+  oracleType: z.enum(["chainlink", "uma"]).optional().default("chainlink"),
   marketAddress: z.string().regex(/^0x[a-fA-F0-9]{40}$/).optional(),
 });
 
@@ -76,7 +76,6 @@ router.post("/", async (req, res) => {
     const oracleConfig: Record<string, { name: string; resolutionTime: string }> = {
       chainlink: { name: "Chainlink", resolutionTime: "24 hr" },
       uma: { name: "UMA", resolutionTime: "24-48 hr" },
-      redstone: { name: "Redstone", resolutionTime: "24 hr" },
     };
 
     const oracleType = data.oracleType || "chainlink";
@@ -98,7 +97,7 @@ router.post("/", async (req, res) => {
         data.category,
         req.body.creatorAddress || "0x0000000000000000000000000000000000000000",
         data.imageUrl || null,
-        oracleType, // Store the actual oracle type (chainlink, uma, redstone)
+        oracleType, // Store the actual oracle type (chainlink, uma)
         oracle.name,
         oracle.resolutionTime,
         data.marketAddress || null,
