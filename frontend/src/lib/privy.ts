@@ -6,10 +6,6 @@
 export const privyConfig = {
   appId: process.env.NEXT_PUBLIC_PRIVY_APP_ID || '',
   config: {
-    // Login methods - social login + wallet
-    // Note: Google login requires Privy App ID and Google OAuth to be enabled in Privy dashboard
-    loginMethods: ['email', 'wallet', 'google', 'twitter'],
-    
     // Appearance - updated to light theme to match app design
     appearance: {
       theme: 'light' as const,
