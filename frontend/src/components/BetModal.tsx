@@ -28,8 +28,7 @@ export default function BetModal({ market, side, onClose, onSuccess }: BetModalP
     // Get wallet address from Privy or window.ethereum
     if (ready && authenticated && user) {
       const addr = user?.wallet?.address || 
-                   user?.wallet?.addresses?.[0] ||
-                   user?.linkedAccounts?.find((acc: any) => acc.type === 'wallet')?.address;
+                   (user?.linkedAccounts?.find((acc: any) => acc.type === 'wallet') as any)?.address;
       setWalletAddress(addr || null);
     } else if (typeof window !== "undefined" && window.ethereum) {
       // Fallback to window.ethereum if Privy not available
@@ -100,7 +99,11 @@ export default function BetModal({ market, side, onClose, onSuccess }: BetModalP
       // Wait for transaction confirmation
       const receipt = await tx.wait();
       
-      showToast.success(`Bet confirmed! ${side ? "YES" : "NO"} - ${amount} BNB`, receipt.hash);
+      if (receipt) {
+        showToast.success(`Bet confirmed! ${side ? "YES" : "NO"} - ${amount} BNB`, receipt.hash);
+      } else {
+        showToast.success(`Bet confirmed! ${side ? "YES" : "NO"} - ${amount} BNB`);
+      }
       onSuccess();
       onClose();
     } catch (error: any) {

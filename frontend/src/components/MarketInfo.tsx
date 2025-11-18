@@ -35,8 +35,7 @@ export default function MarketInfo({ marketId }: MarketInfoProps) {
 
   const address =
     user?.wallet?.address ||
-    user?.wallet?.addresses?.[0] ||
-    user?.linkedAccounts?.find((acc: any) => acc.type === "wallet")?.address;
+    (user?.linkedAccounts?.find((acc: any) => acc.type === "wallet") as any)?.address;
 
   useEffect(() => {
     fetchNotes();

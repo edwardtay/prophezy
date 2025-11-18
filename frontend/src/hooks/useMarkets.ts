@@ -288,7 +288,7 @@ export function useMarkets() {
             description: backendMarket?.description,
             imageUrl: imageUrl, // Set imageUrl explicitly (from backend if available)
             creationTxHash: creationTxHash,
-            creatorAddress: creatorAddress, // Should always be set by now (from events or backend)
+            creatorAddress: creatorAddress || undefined, // Should always be set by now (from events or backend)
             createdAt: backendMarket?.created_at || backendMarket?.createdAt, // Support both naming conventions
             // Include backend market_id for API calls (MarketInfo, MarketChat)
             marketId: backendMarket?.market_id || backendMarket?.id || undefined,

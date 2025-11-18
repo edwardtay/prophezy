@@ -1,8 +1,7 @@
 """
 Oracle Service for Prophezy
-Integrates with Chainlink and Redstone oracles for market resolution
-- Redstone: Fast resolution (15 minutes) - Primary oracle
-- Chainlink: Secure fallback for high-value markets
+Integrates with Chainlink oracle for market resolution
+- Chainlink: Secure oracle for market resolution
 """
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -21,10 +20,6 @@ app = FastAPI(title="Prophezy Oracle Service")
 BNB_CHAIN_RPC = os.getenv("BNB_CHAIN_RPC_URL", "https://data-seed-prebsc-1-s1.binance.org:8545")
 w3 = Web3(Web3.HTTPProvider(BNB_CHAIN_RPC))
 
-# Redstone API configuration
-REDSTONE_API_URL = os.getenv("REDSTONE_API_URL", "https://api.redstone.finance")
-REDSTONE_API_KEY = os.getenv("REDSTONE_API_KEY", "")
-
 # Chainlink configuration
 CHAINLINK_FEED_ADDRESS = os.getenv("CHAINLINK_FEED_ADDRESS", "")
 
@@ -33,8 +28,8 @@ class MarketResolutionRequest(BaseModel):
     marketId: int
     question: str
     category: str
-    oracleType: str  # "redstone" or "chainlink"
-    dataFeedId: Optional[str] = None  # For Redstone
+    oracleType: str  # "chainlink"
+    dataFeedId: Optional[str] = None
     threshold: Optional[float] = None  # Threshold value for comparison
     endTime: Optional[str] = None
 
@@ -44,7 +39,7 @@ class MarketResolution(BaseModel):
     outcome: int  # 1 = yes, 2 = no
     value: float  # Oracle value
     threshold: float
-    oracleType: str  # "redstone" or "chainlink"
+    oracleType: str  # "chainlink"
     timestamp: str
     confidence: float  # 0.0 to 1.0 (based on oracle reliability)
 
@@ -57,65 +52,15 @@ async def health():
 @app.post("/resolve", response_model=MarketResolution)
 async def resolve_market(request: MarketResolutionRequest):
     """
-    Resolve market using Chainlink or Redstone oracle
+    Resolve market using Chainlink oracle
     """
     try:
-        if request.oracleType.lower() == "redstone":
-            return await resolve_with_redstone(request)
-        elif request.oracleType.lower() == "chainlink":
+        if request.oracleType.lower() == "chainlink":
             return await resolve_with_chainlink(request)
         else:
-            raise HTTPException(status_code=400, detail=f"Invalid oracle type: {request.oracleType}")
+            raise HTTPException(status_code=400, detail=f"Invalid oracle type: {request.oracleType}. Only 'chainlink' is supported.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Resolution failed: {str(e)}")
-
-
-async def resolve_with_redstone(request: MarketResolutionRequest) -> MarketResolution:
-    """Resolve market using Redstone oracle (fast - 15 minutes)"""
-    if not request.dataFeedId:
-        raise HTTPException(status_code=400, detail="dataFeedId required for Redstone")
-    
-    if not request.threshold:
-        raise HTTPException(status_code=400, detail="threshold required for resolution")
-    
-    # Fetch data from Redstone API
-    async with httpx.AsyncClient() as client:
-        headers = {}
-        if REDSTONE_API_KEY:
-            headers["Authorization"] = f"Bearer {REDSTONE_API_KEY}"
-        
-        # Redstone API endpoint for getting price/data
-        response = await client.get(
-            f"{REDSTONE_API_URL}/prices",
-            params={"symbols": request.dataFeedId},
-            headers=headers,
-            timeout=10.0
-        )
-        
-        if response.status_code != 200:
-            raise HTTPException(status_code=500, detail=f"Redstone API error: {response.text}")
-        
-        data = response.json()
-        
-        # Extract value from Redstone response
-        # Redstone returns data in format: {"symbol": {"value": 123.45, ...}}
-        if request.dataFeedId not in data:
-            raise HTTPException(status_code=404, detail=f"Data feed {request.dataFeedId} not found")
-        
-        value = float(data[request.dataFeedId].get("value", 0))
-        
-        # Determine outcome based on threshold
-        outcome = 1 if value >= request.threshold else 2
-        
-        return MarketResolution(
-            marketId=request.marketId,
-            outcome=outcome,
-            value=value,
-            threshold=request.threshold,
-            oracleType="redstone",
-            timestamp=datetime.now().isoformat(),
-            confidence=0.95  # Redstone has high reliability
-        )
 
 
 async def resolve_with_chainlink(request: MarketResolutionRequest) -> MarketResolution:
@@ -173,10 +118,6 @@ async def resolve_with_chainlink(request: MarketResolutionRequest) -> MarketReso
 async def get_oracle_status():
     """Get status of oracle providers"""
     status = {
-        "redstone": {
-            "available": bool(REDSTONE_API_URL),
-            "api_url": REDSTONE_API_URL
-        },
         "chainlink": {
             "available": bool(CHAINLINK_FEED_ADDRESS),
             "feed_address": CHAINLINK_FEED_ADDRESS,

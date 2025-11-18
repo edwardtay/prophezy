@@ -56,3 +56,6 @@ temp/
 *.cert
 frontend/localhost*.pem
 
+# Private documentation and guides (not for public repo)
+private/
+

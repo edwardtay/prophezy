@@ -63,11 +63,11 @@ export function getProvider(): ethers.JsonRpcProvider {
 /**
  * Get a signer from Privy wallet
  */
-export function getSigner(provider: ethers.Provider): ethers.JsonRpcSigner | null {
+export async function getSigner(provider: ethers.Provider): Promise<ethers.JsonRpcSigner | null> {
   if (typeof window === "undefined" || !window.ethereum) {
     return null;
   }
-  return new ethers.BrowserProvider(window.ethereum as any).getSigner();
+  return await new ethers.BrowserProvider(window.ethereum as any).getSigner();
 }
 
 /**

@@ -35,7 +35,7 @@ export function AuthSectionWithPrivy() {
   if (authenticated) {
     const walletAddress = 
       user?.wallet?.address ||
-      user?.linkedAccounts?.find((acc: any) => acc.type === 'wallet')?.address;
+      (user?.linkedAccounts?.find((acc: any) => acc.type === 'wallet') as any)?.address;
     const displayAddress = walletAddress
       ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
       : "";
