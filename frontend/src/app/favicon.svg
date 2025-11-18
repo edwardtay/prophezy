@@ -1,0 +1,38 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient Definitions - High Contrast Cyberpunk Orange/Yellow -->
+  <defs>
+    <linearGradient id="crystalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#FF4500" stopOpacity="1"/>
+      <stop offset="50%" stopColor="#FFD700" stopOpacity="1"/>
+      <stop offset="100%" stopColor="#FF6600" stopOpacity="1"/>
+    </linearGradient>
+    <radialGradient id="cyberpunkGlow" cx="50%" cy="50%">
+      <stop offset="0%" stopColor="#FFEB3B" stopOpacity="0.5"/>
+      <stop offset="100%" stopColor="#FF4500" stopOpacity="0.2"/>
+    </radialGradient>
+    <radialGradient id="darkShadow" cx="50%" cy="80%">
+      <stop offset="0%" stopColor="#000000" stopOpacity="0.4"/>
+      <stop offset="100%" stopColor="#000000" stopOpacity="0.1"/>
+    </radialGradient>
+    <linearGradient id="bgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#1A0A00"/>
+      <stop offset="100%" stopColor="#331100"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="32" height="32" rx="6" fill="url(#bgGradient)"/>
+  <ellipse cx="16" cy="28" rx="9" ry="3.5" fill="rgba(0,0,0,0.5)"/>
+  <circle cx="16" cy="16" r="11" fill="url(#crystalGradient)"/>
+  <ellipse cx="16" cy="20" rx="9" ry="7" fill="url(#darkShadow)"/>
+  <ellipse cx="13" cy="11" rx="4.5" ry="5.5" fill="rgba(255,255,255,0.8)"/>
+  <ellipse cx="12.5" cy="10.5" rx="2.2" ry="3.2" fill="rgba(255,255,255,0.95)"/>
+  <circle cx="16" cy="16" r="9" fill="url(#cyberpunkGlow)"/>
+  <circle cx="18" cy="9" r="1.3" fill="#FFD700" opacity="1"/>
+  <circle cx="21" cy="13" r="1.1" fill="#FFEB3B" opacity="1"/>
+  <circle cx="10" cy="12" r="1" fill="#FF4500" opacity="0.95"/>
+  <circle cx="22" cy="18" r="0.9" fill="#FFD700" opacity="0.95"/>
+  <circle cx="8" cy="17" r="0.8" fill="#FF6600" opacity="0.95"/>
+  <circle cx="14" cy="8" r="0.7" fill="#FFEB3B" opacity="0.9"/>
+  <circle cx="24" cy="16" r="0.6" fill="#FFD700" opacity="0.85"/>
+</svg>
+

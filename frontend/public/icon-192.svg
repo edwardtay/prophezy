@@ -1,0 +1,37 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Gradient Definitions - High Contrast Cyberpunk Orange/Yellow -->
+  <defs>
+    <linearGradient id="crystalGradient192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#FF4500" stopOpacity="1"/>
+      <stop offset="50%" stopColor="#FFD700" stopOpacity="1"/>
+      <stop offset="100%" stopColor="#FF6600" stopOpacity="1"/>
+    </linearGradient>
+    <radialGradient id="cyberpunkGlow192" cx="50%" cy="50%">
+      <stop offset="0%" stopColor="#FFEB3B" stopOpacity="0.5"/>
+      <stop offset="100%" stopColor="#FF4500" stopOpacity="0.2"/>
+    </radialGradient>
+    <radialGradient id="darkShadow192" cx="50%" cy="80%">
+      <stop offset="0%" stopColor="#000000" stopOpacity="0.4"/>
+      <stop offset="100%" stopColor="#000000" stopOpacity="0.1"/>
+    </radialGradient>
+    <linearGradient id="bgGradient192" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stopColor="#1A0A00"/>
+      <stop offset="100%" stopColor="#331100"/>
+    </linearGradient>
+  </defs>
+  
+  <rect width="192" height="192" rx="36" fill="url(#bgGradient192)"/>
+  <ellipse cx="96" cy="168" rx="54" ry="21" fill="rgba(0,0,0,0.5)"/>
+  <circle cx="96" cy="96" r="66" fill="url(#crystalGradient192)"/>
+  <ellipse cx="96" cy="120" rx="54" ry="42" fill="url(#darkShadow192)"/>
+  <ellipse cx="78" cy="66" rx="27" ry="33" fill="rgba(255,255,255,0.8)"/>
+  <ellipse cx="75" cy="63" rx="13.2" ry="19.2" fill="rgba(255,255,255,0.95)"/>
+  <circle cx="96" cy="96" r="54" fill="url(#cyberpunkGlow192)"/>
+  <circle cx="108" cy="54" r="7.8" fill="#FFD700" opacity="1"/>
+  <circle cx="126" cy="78" r="6.6" fill="#FFEB3B" opacity="1"/>
+  <circle cx="60" cy="72" r="6" fill="#FF4500" opacity="0.95"/>
+  <circle cx="132" cy="108" r="5.4" fill="#FFD700" opacity="0.95"/>
+  <circle cx="48" cy="102" r="4.8" fill="#FF6600" opacity="0.95"/>
+  <circle cx="84" cy="48" r="4.2" fill="#FFEB3B" opacity="0.9"/>
+  <circle cx="144" cy="96" r="3.6" fill="#FFD700" opacity="0.85"/>
+</svg>
