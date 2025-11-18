@@ -7,9 +7,15 @@ class Database {
   private pool: Pool | null = null;
 
   async init() {
+    if (!process.env.DATABASE_URL) {
+      throw new Error("DATABASE_URL environment variable is required");
+    }
+
     this.pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+      ssl: process.env.NODE_ENV === "production" 
+        ? { rejectUnauthorized: false } 
+        : false,
     });
 
     // Test connection
