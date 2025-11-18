@@ -33,12 +33,12 @@ export function AuthSectionWithPrivy() {
   }
   
   if (authenticated) {
-    const walletAddress = user?.wallet?.address || 
-                         user?.wallet?.addresses?.[0] ||
-                         user?.linkedAccounts?.find((acc: any) => acc.type === 'wallet')?.address;
-    const displayAddress = walletAddress 
+    const walletAddress = 
+      user?.wallet?.address ||
+      user?.linkedAccounts?.find((acc: any) => acc.type === 'wallet')?.address;
+    const displayAddress = walletAddress
       ? `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`
-      : 'Connected';
+      : "";
     
     const copyAddress = () => {
       if (walletAddress) {
