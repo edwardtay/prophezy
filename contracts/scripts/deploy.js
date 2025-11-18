@@ -3,13 +3,6 @@ const hre = require("hardhat");
 async function main() {
   console.log("Deploying Prophezy contracts...");
 
-  // Deploy RedstoneOracle first (no constructor params needed)
-  const RedstoneOracle = await hre.ethers.getContractFactory("RedstoneOracle");
-  const redstoneOracle = await RedstoneOracle.deploy();
-  await redstoneOracle.waitForDeployment();
-  const redstoneOracleAddress = await redstoneOracle.getAddress();
-  console.log("RedstoneOracle deployed to:", redstoneOracleAddress);
-
   // Deploy ChainlinkFallback (placeholder - implement if needed)
   const ChainlinkFallback = await hre.ethers.getContractFactory("ChainlinkFallback");
   const chainlinkFallback = await ChainlinkFallback.deploy();
@@ -27,18 +20,12 @@ async function main() {
   // Deploy PredictionMarket with oracle addresses
   const PredictionMarket = await hre.ethers.getContractFactory("PredictionMarket");
   const predictionMarket = await PredictionMarket.deploy(
-    redstoneOracleAddress,
     chainlinkFallbackAddress,
     disputeResolutionAddress
   );
   await predictionMarket.waitForDeployment();
   const predictionMarketAddress = await predictionMarket.getAddress();
   console.log("PredictionMarket deployed to:", predictionMarketAddress);
-
-  // Authorize PredictionMarket to call RedstoneOracle
-  const authorizeTx = await redstoneOracle.authorizeResolver(predictionMarketAddress, true);
-  await authorizeTx.wait();
-  console.log("Authorized PredictionMarket to use RedstoneOracle");
 
   // Authorize deployer as oracle in PredictionMarket
   const [deployer] = await hre.ethers.getSigners();
@@ -61,7 +48,6 @@ async function main() {
   console.log("AccountAbstraction deployed to:", accountAbstractionAddress);
 
   console.log("\n=== Deployment Summary ===");
-  console.log("RedstoneOracle:", redstoneOracleAddress);
   console.log("ChainlinkFallback:", chainlinkFallbackAddress);
   console.log("DisputeResolution:", disputeResolutionAddress);
   console.log("PredictionMarket:", predictionMarketAddress);
@@ -70,7 +56,6 @@ async function main() {
   
   console.log("\n=== Environment Variables ===");
   console.log(`PREDICTION_MARKET_ADDRESS=${predictionMarketAddress}`);
-  console.log(`REDSTONE_ORACLE_ADDRESS=${redstoneOracleAddress}`);
 }
 
 main()

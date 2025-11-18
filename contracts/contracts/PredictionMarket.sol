@@ -3,14 +3,13 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./RedstoneOracle.sol";
 import "./ChainlinkFallback.sol";
 import "./DisputeResolution.sol";
 
 /**
  * @title PredictionMarket
- * @dev Core prediction market contract with Redstone (fast) + Chainlink (secure) oracle integration
- * Oracle Resolution: 15 minutes (Redstone) vs 24-48hrs (UMA)
+ * @dev Core prediction market contract with Chainlink oracle integration
+ * Oracle Resolution: 24-48hrs (UMA) vs Chainlink (secure)
  */
 contract PredictionMarket is Ownable, ReentrancyGuard {
 
@@ -44,11 +43,10 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     mapping(address => bool) public authorizedOracles;
     
     // Oracle integrations
-    RedstoneOracle public redstoneOracle;
     ChainlinkFallback public chainlinkFallback;
     DisputeResolution public disputeResolution;
     
-    // Oracle selection: 0 = Redstone (fast), 1 = Chainlink (secure)
+    // Oracle selection: 0 = Chainlink (secure)
     mapping(uint256 => uint8) public marketOracleType;
     mapping(uint256 => uint256) public marketValueThreshold; // For oracle comparison
 
@@ -86,13 +84,9 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     }
 
     constructor(
-        address _redstoneOracle,
         address _chainlinkFallback,
         address _disputeResolution
     ) Ownable(msg.sender) {
-        if (_redstoneOracle != address(0)) {
-            redstoneOracle = RedstoneOracle(_redstoneOracle);
-        }
         if (_chainlinkFallback != address(0)) {
             chainlinkFallback = ChainlinkFallback(_chainlinkFallback);
         }
@@ -103,7 +97,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
 
     /**
      * @dev Create a new prediction market
-     * @param oracleType 0 = Redstone (fast, 15 mins), 1 = Chainlink (secure, slower)
+     * @param oracleType 0 = Chainlink (secure)
      * @param valueThreshold Threshold value for oracle comparison
      */
     function createMarket(
@@ -116,7 +110,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     ) external returns (uint256) {
         require(bytes(question).length > 0, "Question required");
         require(duration > 0, "Invalid duration");
-        require(oracleType <= 1, "Invalid oracle type");
+        require(oracleType == 0, "Invalid oracle type");
 
         marketCounter++;
         uint256 marketId = marketCounter;
@@ -168,41 +162,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
     }
 
     /**
-     * @dev Resolve market using Redstone (fast - 15 minutes)
-     * @param marketId The market ID to resolve
-     * @param dataFeedId The Redstone data feed ID (e.g., "ETH")
-     * @notice Redstone data must be passed via calldata - backend prepares this using Redstone SDK
-     * @notice The transaction calldata must include Redstone price data prepared by Redstone SDK
-     */
-    function resolveMarketFast(
-        uint256 marketId,
-        bytes32 dataFeedId
-    ) external onlyOracle validMarket(marketId) {
-        Market storage market = markets[marketId];
-        require(market.status == MarketStatus.Active, "Market not active");
-        require(block.timestamp >= market.endTime, "Market not ended");
-        require(
-            address(redstoneOracle) != address(0),
-            "Redstone oracle not configured"
-        );
-        require(marketOracleType[marketId] == 0, "Market uses Chainlink");
-
-        // Redstone data is passed via calldata - the calldata includes price data
-        // This is prepared by the backend using Redstone SDK before calling this function
-        uint256 outcome = redstoneOracle.resolveMarketFast(
-            marketId,
-            dataFeedId,
-            marketValueThreshold[marketId]
-        );
-
-        market.status = MarketStatus.Resolved;
-        market.outcome = outcome;
-
-        emit MarketResolved(marketId, outcome, msg.sender);
-    }
-
-    /**
-     * @dev Resolve market using Chainlink (secure fallback)
+     * @dev Resolve market using Chainlink
      */
     function resolveMarketSecure(
         uint256 marketId,
@@ -215,7 +175,7 @@ contract PredictionMarket is Ownable, ReentrancyGuard {
             address(chainlinkFallback) != address(0),
             "Chainlink fallback not configured"
         );
-        require(marketOracleType[marketId] == 1, "Market uses Redstone");
+        require(marketOracleType[marketId] == 0, "Invalid oracle type");
 
         uint256 outcome = chainlinkFallback.resolveMarketSecure(
             marketId,

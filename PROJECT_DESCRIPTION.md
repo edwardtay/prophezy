@@ -17,10 +17,10 @@ Current prediction markets face two critical bottlenecks:
 
 Prophezy combines three innovations:
 
-### 1. Fast Oracles (15 minutes vs 24-48 hours)
-- **Primary**: Redstone oracle for fast resolution (15 minutes)
-- **Fallback**: Chainlink for high-value markets requiring security
-- **Result**: 96% faster resolution than UMA
+### 1. Secure Oracles
+- **Primary**: Chainlink for secure market resolution (24 hours)
+- **Future**: UMA for arbitrary events (requires offchain router/mirror)
+- **Result**: Reliable resolution with Chainlink's proven security
 
 ### 2. Account Abstraction (Gasless UX)
 - **Privy Integration**: Social login (Google, Twitter, Discord), embedded wallets, no external wallet needed
@@ -37,8 +37,7 @@ Prophezy combines three innovations:
 
 ### Smart Contracts (BNB Chain)
 - `PredictionMarket.sol`: Core market logic
-- `RedstoneOracle.sol`: Fast oracle integration (15 mins)
-- `ChainlinkFallback.sol`: Secure oracle fallback
+- `ChainlinkFallback.sol`: Chainlink oracle integration
 - `DisputeResolution.sol`: Handle contested results
 - `LiquidityAggregator.sol`: Cross-market liquidity routing
 - `AccountAbstraction.sol`: ERC-4337 compatible
@@ -56,14 +55,13 @@ Prophezy combines three innovations:
 
 ### Oracle Service
 - Python FastAPI service
-- Redstone integration
-- Chainlink fallback
+- Chainlink integration
 - Performance metrics tracking
 
 ## Key Features
 
 ### Core MVP (Hackathon)
-✅ Fast oracle resolution (15 minutes)  
+✅ Secure oracle resolution (Chainlink)  
 ✅ Account Abstraction (gasless UX)  
 ✅ One-click market creation  
 ✅ Liquidity aggregation  
@@ -82,7 +80,7 @@ Prophezy combines three innovations:
 
 | Feature | Polymarket | **Prophezy** |
 |---------|-----------|----------------|
-| Oracle Speed | 24-48hrs | **15 mins** |
+| Oracle Speed | 24-48hrs | **24 hrs** |
 | Requires Wallet | Yes | **No (AA)** |
 | Gas Fees | User pays | **Gasless** |
 | Market Creation | Complex | **One-click** |
@@ -98,7 +96,7 @@ Prophezy combines three innovations:
 ## Revenue Model
 
 **Fee Structure**: 1-2% on winning bets
-- Oracle providers (Redstone node operators)
+- Oracle providers (Chainlink node operators)
 - Liquidity providers
 - Protocol treasury
 - Dispute resolution stakers

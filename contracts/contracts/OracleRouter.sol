@@ -11,7 +11,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract OracleRouter is Ownable {
     struct Feed {
         bytes32 feedId;
-        address priceFeed; // Address of the price feed contract (Chainlink, Redstone, etc.)
+        address priceFeed; // Address of the price feed contract (Chainlink, etc.)
         bool active;
         uint256 lastUpdate;
     }
