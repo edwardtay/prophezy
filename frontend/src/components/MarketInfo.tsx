@@ -44,7 +44,7 @@ export default function MarketInfo({ marketId }: MarketInfoProps) {
   const fetchNotes = async () => {
     try {
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/markets/${marketId}/info`
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/api/markets/${marketId}/info`
       );
       setNotes(response.data);
     } catch (error) {
@@ -69,7 +69,7 @@ export default function MarketInfo({ marketId }: MarketInfoProps) {
     setSubmitting(true);
     try {
       await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/markets/${marketId}/info`,
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/api/markets/${marketId}/info`,
         {
           userAddress: address,
           title: formData.title.trim(),

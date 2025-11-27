@@ -48,7 +48,7 @@ export default function MarketChat({ marketId }: MarketChatProps) {
   const fetchMessages = async () => {
     try {
       const response = await axios.get(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/markets/${marketId}/chat`
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/api/markets/${marketId}/chat`
       );
       setMessages(response.data);
     } catch (error) {
@@ -69,7 +69,7 @@ export default function MarketChat({ marketId }: MarketChatProps) {
     setSending(true);
     try {
       await axios.post(
-        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/markets/${marketId}/chat`,
+        `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005"}/api/markets/${marketId}/chat`,
         {
           userAddress: address,
           message: newMessage.trim(),

@@ -3,10 +3,10 @@ import cors from "cors";
 import { z } from "zod";
 
 const app = express();
-const PORT = process.env.BACKEND_PORT || 3001;
+const PORT = process.env.BACKEND_PORT || 3005;
 
 app.use(cors({
-  origin: ['https://localhost:3000', 'http://localhost:3000', 'http://localhost:3001'],
+  origin: ['https://localhost:3000', 'http://localhost:3000', 'http://localhost:3005', 'http://127.0.0.1', 'http://127.0.0.1:80'],
   credentials: true,
 }));
 app.use(express.json());
@@ -29,6 +29,51 @@ const createMarketSchema = z.object({
 // Health check
 app.get("/health", (req, res) => {
   res.json({ status: "ok", timestamp: new Date().toISOString(), mode: "mock" });
+});
+
+// Mock login endpoint for OriginTrail Edge Node compatibility
+app.post("/login", (req, res) => {
+  const { username, password } = req.body;
+  
+  // Accept default OriginTrail credentials
+  if (username === "my_edge_node" && password === "edge_node_pass") {
+    res.json({
+      success: true,
+      token: "mock-token-" + Date.now(),
+      user: {
+        id: 1,
+        username: username,
+      },
+    });
+  } else {
+    res.status(401).json({
+      success: false,
+      error: "Invalid credentials",
+    });
+  }
+});
+
+// Mock check endpoint for authentication status (OriginTrail Edge Node compatibility)
+app.get("/check", (req, res) => {
+  // Check for authorization token in headers
+  const authHeader = req.headers.authorization;
+  
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    // Token present - user is authenticated
+    res.json({
+      authenticated: true,
+      user: {
+        id: 1,
+        username: "my_edge_node",
+      },
+    });
+  } else {
+    // No token - return 200 OK with authenticated: false (not 401)
+    // This is the expected format for auth check endpoints
+    res.status(200).json({
+      authenticated: false,
+    });
+  }
 });
 
 // Get all markets

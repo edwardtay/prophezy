@@ -224,6 +224,7 @@ export interface MarketData {
   state: MarketState;
   totalYes: string;
   totalNo: string;
+  deadline?: number; // Unix timestamp in seconds when market resolves
   // Optional metadata (stored off-chain)
   question?: string;
   category?: string;

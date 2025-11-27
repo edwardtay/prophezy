@@ -7,6 +7,7 @@ import { BrowserProvider, Contract, ethers } from "ethers";
 import marketArtifact from "@/abi/PredictionMarket.json";
 import MarketChat from "./MarketChat";
 import MarketInfo from "./MarketInfo";
+import { extractDateFromQuestion } from "../lib/dateExtractor";
 import { showToast } from "../lib/toast";
 
 const MARKET_ABI = marketArtifact.abi;
@@ -21,6 +22,7 @@ export type MarketRow = {
   oracle_name?: string;
   oracle_resolution_time?: string;
   creator_address?: string;
+  imageUrl?: string; // Market image URL
   // ... other offchain fields
 };
 
@@ -132,7 +134,7 @@ export default function MarketDetail({ market, onClose }: MarketDetailProps) {
   useEffect(() => {
     const fetchPositions = async () => {
       setLoading(true);
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
       const positionsMap = new Map<string, Position>();
       
       // Try to fetch from backend first (if market.id > 0)
@@ -248,7 +250,7 @@ export default function MarketDetail({ market, onClose }: MarketDetailProps) {
 
     setChallenging(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
       const response = await axios.post(
         `${API_URL}/api/markets/${market.id}/challenge`,
         {
@@ -283,8 +285,26 @@ export default function MarketDetail({ market, onClose }: MarketDetailProps) {
   // Use onchain question if available, otherwise fallback to offchain
   const displayQuestion = onchain?.question || market.questionOffchain || `Market ${market.onchainAddress.slice(0, 8)}...${market.onchainAddress.slice(-6)}`;
   
-  // Use onchain deadline if available
-  const deadlineDate = onchain?.deadline ? new Date(onchain.deadline * 1000) : null;
+  // Fix deadline: Extract date from question if available, prefer it over on-chain deadline
+  // This fixes markets created before the date extraction fix
+  let deadlineTimestamp = onchain?.deadline || null;
+  const extractedDate = extractDateFromQuestion(displayQuestion);
+  if (extractedDate.unixTimestamp && extractedDate.unixTimestamp > 0 && deadlineTimestamp) {
+    // Use extracted date from question if available
+    // Only override if the on-chain deadline seems wrong (more than 1 day difference)
+    const daysDifference = Math.abs(extractedDate.unixTimestamp - deadlineTimestamp) / 86400;
+    if (daysDifference > 1) {
+      console.log(`[MarketDetail] Market ${market.onchainAddress}: Overriding on-chain deadline with date from question`);
+      console.log(`  On-chain deadline: ${new Date(deadlineTimestamp * 1000).toISOString()}`);
+      console.log(`  Extracted from question: ${extractedDate.date?.toISOString()}`);
+      deadlineTimestamp = extractedDate.unixTimestamp;
+    }
+  } else if (extractedDate.unixTimestamp && extractedDate.unixTimestamp > 0 && !deadlineTimestamp) {
+    // If no on-chain deadline but question has a date, use it
+    deadlineTimestamp = extractedDate.unixTimestamp;
+  }
+  
+  const deadlineDate = deadlineTimestamp ? new Date(deadlineTimestamp * 1000) : null;
 
   // Safe date formatting with fallback to mock dates
   const formatDateSafe = (dateString: string | undefined | null, fallback: string = "N/A") => {
@@ -343,6 +363,21 @@ export default function MarketDetail({ market, onClose }: MarketDetailProps) {
 
         {/* Content */}
         <div className="p-6 space-y-6">
+          {/* Market Image - Show if available */}
+          {(market.imageUrl || offchainInfo?.image_url || offchainInfo?.imageUrl) && (
+            <div className="-mx-6 -mt-6 mb-6">
+              <img
+                src={market.imageUrl || offchainInfo?.image_url || offchainInfo?.imageUrl}
+                alt={displayQuestion || "Market image"}
+                className="w-full h-64 sm:h-80 object-cover"
+                onError={(e) => {
+                  // Hide image if it fails to load
+                  (e.target as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            </div>
+          )}
+          
           {/* Question */}
           <div>
             <h3 className="text-xl font-semibold text-gray-900 mb-4 break-words">

@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 import factoryArtifact from "@/abi/PredictionMarketFactory.json";
 import { getMarketContract, CONTRACT_ADDRESSES, BNB_TESTNET_CHAIN_ID, ensureBNBTestnet, isOnBNBTestnet, BNB_TESTNET_FEEDS, FACTORY_ADDRESS } from "../lib/contracts";
 import { showToast } from "../lib/toast";
+import { calculateDeadline, extractDateFromQuestion } from "../lib/dateExtractor";
 
 export default function CreateMarket() {
   const router = useRouter();
@@ -105,6 +106,14 @@ export default function CreateMarket() {
       threshold: "1",
       oracle: "uma" as const,
       category: "Other"
+    },
+    {
+      name: "Crypto Price Feed",
+      question: "Will Ethereum exceed $5,000 by March 31, 2025?",
+      feedId: "ETH",
+      threshold: "5000",
+      oracle: "chainlink" as const,
+      category: "Crypto"
     }
   ];
 
@@ -459,14 +468,35 @@ Question: Will`,
         signer
       );
       
-      // Calculate deadline (7 days from now)
-      const duration = 7 * 24 * 60 * 60; // 7 days in seconds
-      const deadlineUnix = Math.floor(Date.now() / 1000) + duration;
+      // Extract deadline from question (e.g., "by November 30, 2025") or use default
+      const deadlineUnix = calculateDeadline(question, 7); // Default to 7 days if no date found
+      const extractedDate = extractDateFromQuestion(question);
+      
+      if (extractedDate.date) {
+        console.log(`[CreateMarket] ✅ Using extracted deadline from question: "${extractedDate.matchedText}" -> ${extractedDate.date.toISOString()}`);
+        console.log(`[CreateMarket] Deadline Unix timestamp: ${deadlineUnix}`);
+        console.log(`[CreateMarket] Current time: ${Math.floor(Date.now() / 1000)}`);
+        console.log(`[CreateMarket] Days until deadline: ${Math.floor((deadlineUnix - Math.floor(Date.now() / 1000)) / 86400)}`);
+      } else {
+        console.log(`[CreateMarket] ⚠️ No date found in question, using default deadline: 7 days from now`);
+        console.log(`[CreateMarket] Deadline Unix timestamp: ${deadlineUnix}`);
+      }
+      
+      console.log(`[CreateMarket] Question being sent to contract: "${question}"`);
+      console.log(`[CreateMarket] Feed address: ${feedAddress}`);
+      console.log(`[CreateMarket] Strike price (raw): ${finalThreshold}`);
       
       // Convert strike price to BigInt with 8 decimals
       const strikePriceRaw = BigInt(Math.floor(parseFloat(finalThreshold) * 10 ** thresholdDecimals));
 
       // Simplest – let ethers / wallet handle gas values
+      // Transaction will be sent immediately
+      console.log(`[CreateMarket] Calling factory.createMarket with:`);
+      console.log(`  - feedAddress: ${feedAddress}`);
+      console.log(`  - question: "${question}"`);
+      console.log(`  - deadlineUnix: ${deadlineUnix} (${new Date(deadlineUnix * 1000).toISOString()})`);
+      console.log(`  - strikePriceRaw: ${strikePriceRaw}`);
+      
       const tx = await factory.createMarket(
         feedAddress,
         question,
@@ -476,16 +506,27 @@ Question: Will`,
 
       console.log("Tx sent:", tx.hash);
       
-      // Show transaction submitted
+      // Show transaction submitted immediately
       if (loadingToast) toast.dismiss(loadingToast);
-      showToast.transaction(tx.hash, "Market creation transaction submitted!");
+      showToast.transaction(tx.hash, "Transaction submitted! Waiting for confirmation...");
       
-      // Wait for transaction to be mined and extract market address from event
+      // Wait for transaction to be mined (1 confirmation is enough for testnet)
       let marketAddress = "";
-      confirmingToast = showToast.loading("Waiting for confirmation...");
+      const startTime = Date.now();
+      confirmingToast = showToast.loading("Confirming transaction... (usually ~15 seconds on BNB Testnet)");
+      
       try {
-        const receipt = await tx.wait();
-        console.log("Tx mined:", receipt.hash);
+        // Wait for 1 confirmation only (faster than default which waits for more)
+        // On BNB Testnet, blocks are ~3 seconds, so 1 confirmation is sufficient
+        const receipt = await Promise.race([
+          tx.wait(1), // Wait for 1 confirmation
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Transaction timeout after 60 seconds")), 60000)
+          )
+        ]) as any;
+        
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        console.log(`Tx mined in ${elapsed}s:`, receipt.hash);
         
         // Parse MarketCreated event from receipt
         if (receipt && factory.interface) {
@@ -504,9 +545,22 @@ Question: Will`,
             }
           }
         }
-      } catch (error) {
-        console.error("Error waiting for transaction or parsing event:", error);
+      } catch (error: any) {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        console.error(`Error after ${elapsed}s:`, error);
         if (confirmingToast) toast.dismiss(confirmingToast);
+        
+        // If timeout, still show success with tx hash - user can check manually
+        if (error.message?.includes("timeout")) {
+          showToast.success(
+            `Transaction submitted! Check status: ${tx.hash.slice(0, 10)}...`,
+            tx.hash
+          );
+          // Still try to navigate - market might appear later
+          router.push("/?refresh=true");
+          setLoading(false);
+          return;
+        }
       }
 
       if (confirmingToast) toast.dismiss(confirmingToast);
@@ -524,16 +578,21 @@ Question: Will`,
       // This allows the market to be displayed in the market list
       if (marketAddress && walletAddress) {
         try {
-          // Calculate duration (7 days default) and resolution delay based on oracle type
-          const duration = 7 * 24 * 60 * 60; // 7 days in seconds
+          // Calculate duration from deadline (deadline is already set from question or default)
+          const now = Math.floor(Date.now() / 1000);
+          const duration = deadlineUnix - now; // Duration in seconds until deadline
+          
           const resolutionDelays: Record<string, number> = {
-            chainlink: 24 * 60 * 60, // 24 hours
-            uma: 48 * 60 * 60, // 48 hours (UMA resolver on Sepolia + relayer to BNB)
+            chainlink: 24 * 60 * 60, // 24 hours after deadline
+            uma: 48 * 60 * 60, // 48 hours after deadline (UMA resolver on Sepolia + relayer to BNB)
           };
           const resolutionDelay = resolutionDelays[oracleType] || 24 * 60 * 60; // Default to Chainlink (24hr)
 
-          await axios.post(
-            `${process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001"}/api/markets`,
+          const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
+          console.log(`[CreateMarket] Storing market metadata for ${marketAddress} to ${apiUrl}/api/markets`);
+          
+          const response = await axios.post(
+            `${apiUrl}/api/markets`,
             {
               question,
               category,
@@ -545,13 +604,24 @@ Question: Will`,
               marketAddress: marketAddress, // Include market address
             }
           );
-        } catch (error) {
+          
+          console.log(`[CreateMarket] Successfully stored market metadata:`, response.data);
+        } catch (error: any) {
           console.error("Failed to store market metadata:", error);
+          console.error("Error details:", {
+            message: error.message,
+            response: error.response?.data,
+            status: error.response?.status,
+          });
           // Don't fail the whole operation if metadata storage fails
+          // The market will still appear from on-chain data, just without backend metadata
         }
       } else if (!marketAddress) {
         console.warn("Market address not available yet, metadata will be stored later");
+        console.warn("Transaction hash:", tx.hash);
         // Could implement a retry mechanism here if needed
+      } else if (!walletAddress) {
+        console.warn("Wallet address not available, skipping metadata storage");
       }
 
       // Reset form
@@ -561,15 +631,14 @@ Question: Will`,
       setImage(null);
       setImagePreview(null);
       
-      // Navigate to markets page to see the new market
-      // Add refresh parameter to trigger refetch
+      // Navigate to markets page immediately - market will appear once blockchain syncs
+      // The useMarkets hook will auto-refresh and pick up the new market
+      router.push("/?refresh=true");
+      
+      // Auto-refresh after a short delay to ensure backend has the data
       setTimeout(() => {
-        router.push("/?refresh=true");
-        // Also refresh after a bit more time to ensure backend has the data
-        setTimeout(() => {
-          router.refresh();
-        }, 3000);
-      }, 2000); // Give time for transaction to be mined
+        router.refresh();
+      }, 1000);
     } catch (error: any) {
       console.error("Failed to create market", error);
       let errorMsg = "Failed to create market";

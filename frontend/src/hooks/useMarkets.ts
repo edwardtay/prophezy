@@ -9,6 +9,7 @@ import {
   MarketState,
   FACTORY_ADDRESS,
 } from "../lib/contracts";
+import { extractDateFromQuestion } from "../lib/dateExtractor";
 
 const MARKET_ABI = marketArtifact.abi;
 
@@ -53,72 +54,115 @@ export function useMarkets() {
       const provider = getProvider();
       const factory = getFactoryContract(provider);
 
-      // Get all market addresses from factory (ONLY on-chain markets - no mocks)
-      const marketAddresses: string[] = await factory.getMarkets();
-      
-      // Single getLogs call for all MarketCreated events (more efficient, avoids rate limits)
+      // PRIMARY SOURCE: Get market addresses from factory.getMarkets() (most reliable)
+      // SECONDARY: Extract market addresses from MarketCreated events (for recent markets)
       const creationTxMap = new Map<string, string>();
       const creatorByMarket: Record<string, string> = {};
+      const marketAddressesFromEvents = new Set<string>();
+      
+      // First, get markets from factory (fast and reliable)
+      let marketAddressesFromFactory: string[] = [];
       try {
-        // Query all MarketCreated events from the factory contract in one call
+        marketAddressesFromFactory = await factory.getMarkets();
+        console.log(`[useMarkets] Factory.getMarkets() returned ${marketAddressesFromFactory.length} markets`);
+      } catch (err) {
+        console.warn("Failed to fetch markets from factory.getMarkets():", err);
+      }
+      
+      // Then, try to get recent events (last 50k blocks) to catch any very recent markets
+      // Querying from block 0 causes RPC rate limits, so we use a recent window
+      try {
+        // Query recent MarketCreated events (last 50k blocks ~= 2-3 days on BNB Testnet)
         // Event signature: MarketCreated(address indexed market, address indexed creator, address indexed feedAddress)
         const MARKET_CREATED_TOPIC = ethers.id("MarketCreated(address,address,address)");
         
-        // Use a reasonable fromBlock - you can adjust this or use deployment block
-        // For now, query from block 0 (or use a known deployment block if available)
+        // Get current block and query from 50k blocks ago (reasonable window)
+        const currentBlock = await provider.getBlockNumber();
+        const fromBlock = Math.max(0, currentBlock - 50000); // Last 50k blocks
+        
         const filter = {
           address: FACTORY_ADDRESS,
           topics: [MARKET_CREATED_TOPIC],
-          fromBlock: 0, // Start from beginning, or use deployment block if known
+          fromBlock: fromBlock,
           toBlock: "latest",
         };
         
         const logs = await provider.getLogs(filter);
+        console.log(`[useMarkets] Found ${logs.length} MarketCreated events in last 50k blocks`);
         
         // Build map: marketAddress -> creator (and also store tx hash)
+        // Also collect all market addresses from events
         for (const log of logs) {
           try {
             // Parse the event log
             let parsed: any = null;
+            let marketAddress: string | null = null;
+            let creatorAddress: string | null = null;
+            
             try {
               parsed = factory.interface.parseLog({
                 topics: log.topics,
                 data: log.data,
               });
+              if (parsed && parsed.args) {
+                marketAddress = parsed.args.market?.toLowerCase() || parsed.args[0]?.toLowerCase();
+                creatorAddress = parsed.args.creator?.toLowerCase() || parsed.args[1]?.toLowerCase();
+              }
             } catch (parseErr) {
               // Fallback: extract directly from topics if parsing fails
               if (log.topics && log.topics.length >= 3) {
-                const marketAddress = ethers.getAddress("0x" + log.topics[1].slice(26)).toLowerCase();
-                const creatorAddress = ethers.getAddress("0x" + log.topics[2].slice(26)).toLowerCase();
-                creatorByMarket[marketAddress] = creatorAddress;
-                creationTxMap.set(marketAddress, log.transactionHash);
-                continue;
+                marketAddress = ethers.getAddress("0x" + log.topics[1].slice(26)).toLowerCase();
+                creatorAddress = ethers.getAddress("0x" + log.topics[2].slice(26)).toLowerCase();
               }
             }
             
-            if (parsed && parsed.args) {
-              const market = parsed.args.market?.toLowerCase() || parsed.args[0]?.toLowerCase();
-              const creator = parsed.args.creator?.toLowerCase() || parsed.args[1]?.toLowerCase();
+            if (marketAddress && creatorAddress) {
+              // Normalize address format
+              const normalizedMarket = ethers.getAddress(marketAddress);
+              const normalizedCreator = ethers.getAddress(creatorAddress);
               
-              if (market && creator) {
-                creatorByMarket[market] = creator;
-                creationTxMap.set(market, log.transactionHash);
-              }
+              marketAddressesFromEvents.add(normalizedMarket.toLowerCase());
+              creatorByMarket[normalizedMarket.toLowerCase()] = normalizedCreator.toLowerCase();
+              creationTxMap.set(normalizedMarket.toLowerCase(), log.transactionHash);
             }
           } catch (parseErr) {
             console.warn(`[useMarkets] Error parsing log ${log.transactionHash}:`, parseErr);
           }
         }
         
-      } catch (err) {
-        console.warn("Failed to fetch MarketCreated events:", err);
+        console.log(`[useMarkets] Extracted ${marketAddressesFromEvents.size} unique markets from events`);
+      } catch (err: any) {
+        // Rate limit or other RPC errors are expected - factory.getMarkets() is primary source anyway
+        if (err?.message?.includes("rate limit")) {
+          console.warn("RPC rate limit hit for events query (this is OK - using factory.getMarkets() as primary)");
+        } else {
+          console.warn("Failed to fetch MarketCreated events:", err);
+        }
       }
+
+      // Merge both sources: factory (primary) + events (for very recent markets)
+      // Use Set to deduplicate addresses
+      const allMarketAddressesSet = new Set<string>();
+      // Add factory markets first (primary source)
+      marketAddressesFromFactory.forEach(addr => {
+        try {
+          const normalized = ethers.getAddress(addr).toLowerCase();
+          allMarketAddressesSet.add(normalized);
+        } catch (e) {
+          console.warn(`[useMarkets] Invalid address from factory: ${addr}`);
+        }
+      });
+      // Add event markets (may catch very recent ones not yet in factory.getMarkets())
+      marketAddressesFromEvents.forEach(addr => allMarketAddressesSet.add(addr.toLowerCase()));
+      
+      const marketAddresses = Array.from(allMarketAddressesSet);
+      console.log(`[useMarkets] Total unique markets to fetch: ${marketAddresses.length}`);
 
       // Fetch metadata from backend API (ONLY for enriching on-chain markets with metadata - not for displaying)
       // Backend markets are matched to on-chain markets by market_address
       let backendMarkets: any[] = [];
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
         const response = await axios.get(`${apiUrl}/api/markets`);
         backendMarkets = response.data || [];
       } catch (err) {
@@ -129,14 +173,20 @@ export function useMarkets() {
       const backendMapByAddress = new Map<string, any>();
       const backendMapByFeedId = new Map<string, any>();
       backendMarkets.forEach((m: any) => {
-        // Primary: match by market_address if available
-        if (m.market_address) {
-          const addrLower = m.market_address.toLowerCase();
-          backendMapByAddress.set(addrLower, m);
+        // Primary: match by market_address if available (handle both snake_case and camelCase)
+        const marketAddr = m.market_address || m.marketAddress;
+        if (marketAddr) {
+          try {
+            const addrLower = ethers.getAddress(marketAddr).toLowerCase();
+            backendMapByAddress.set(addrLower, m);
+          } catch (e) {
+            console.warn(`[useMarkets] Invalid market_address in backend: ${marketAddr}`);
+          }
         }
         // Fallback: match by feedId if available
-        if (m.feed_id) {
-          const feedIdLower = m.feed_id.toLowerCase();
+        const feedId = m.feed_id || m.feedId;
+        if (feedId) {
+          const feedIdLower = feedId.toLowerCase();
           backendMapByFeedId.set(feedIdLower, m);
           // Also try without 0x prefix if present
           if (feedIdLower.startsWith('0x')) {
@@ -144,6 +194,8 @@ export function useMarkets() {
           }
         }
       });
+      
+      console.log(`[useMarkets] Backend markets mapped: ${backendMapByAddress.size} by address, ${backendMapByFeedId.size} by feedId`);
 
       // Fetch data for each market using new ABI
       const marketPromises = marketAddresses.map(async (address) => {
@@ -174,6 +226,13 @@ export function useMarkets() {
             marketContract.resolved(),
             marketContract.outcome(), // enum: 0,1,2
           ]);
+          
+          // Log what we're reading from the contract
+          console.log(`[useMarkets] Market ${address}:`);
+          console.log(`  Question from contract: "${question}"`);
+          console.log(`  Deadline from contract: ${deadline} (${new Date(Number(deadline) * 1000).toISOString()})`);
+          console.log(`  Resolved: ${resolved}`);
+          console.log(`  Outcome: ${outcome}`);
           
           // Try to read creator directly from contract (simplest method)
           let creatorFromContract: string | null = null;
@@ -267,12 +326,32 @@ export function useMarkets() {
 
           // Extract imageUrl from backend market (support both snake_case and camelCase)
           const imageUrl = backendMarket?.image_url || backendMarket?.imageUrl || null;
+          if (imageUrl) {
+            console.log(`[useMarkets] Found imageUrl for market ${address}: ${imageUrl.substring(0, 50)}...`);
+          }
 
           // Ensure we always have a question - prioritize contract, then backend, then fallback
           const displayQuestion = question || backendMarket?.question || `Market ${address.slice(0, 8)}...${address.slice(-6)}`;
           
           // Category: use backend if available, otherwise try to infer or use "Other"
           const displayCategory = backendMarket?.category || "Other";
+          
+          // Fix deadline: Extract date from question if available, prefer it over on-chain deadline
+          // This fixes markets created before the date extraction fix
+          let finalDeadline = Number(deadline);
+          const extractedDate = extractDateFromQuestion(displayQuestion);
+          if (extractedDate.unixTimestamp && extractedDate.unixTimestamp > 0) {
+            // Use extracted date from question if available
+            // Only override if the on-chain deadline seems wrong (more than 1 day difference)
+            const onChainDeadline = Number(deadline);
+            const daysDifference = Math.abs(extractedDate.unixTimestamp - onChainDeadline) / 86400;
+            if (daysDifference > 1) {
+              console.log(`[useMarkets] Market ${address}: Overriding on-chain deadline with date from question`);
+              console.log(`  On-chain deadline: ${new Date(onChainDeadline * 1000).toISOString()}`);
+              console.log(`  Extracted from question: ${extractedDate.date?.toISOString()}`);
+              finalDeadline = extractedDate.unixTimestamp;
+            }
+          }
           
           const marketData: MarketData = {
             address,
@@ -282,6 +361,7 @@ export function useMarkets() {
             state: state as MarketState,
             totalYes: totalYes > 0n ? ethers.formatEther(totalYes) : "0",
             totalNo: totalNo > 0n ? ethers.formatEther(totalNo) : "0",
+            deadline: finalDeadline, // Use corrected deadline (from question if available)
             // Use question from contract first (most reliable), fallback to backend, then generic
             question: displayQuestion,
             category: displayCategory,
@@ -334,6 +414,7 @@ export function useMarkets() {
             state: state,
             totalYes: "0",
             totalNo: "0",
+            deadline: deadline > 0 ? Number(deadline) : undefined,
             question: question || `Market ${address.slice(0, 8)}...${address.slice(-6)}`,
           } as MarketData;
         }
@@ -367,7 +448,7 @@ export function useMarkets() {
         // Try to create backend entries for these markets (non-blocking)
         Promise.all(marketsNeedingBackendSync.map(async (market) => {
           try {
-            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+            const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
             // Check if backend entry already exists
             const backendMarkets = await axios.get(`${apiUrl}/api/markets`);
             const exists = backendMarkets.data.some((m: any) => 
@@ -405,7 +486,7 @@ export function useMarkets() {
         if (!/^0x[a-fA-F0-9]{40}$/.test(m.address)) {
           return false;
         }
-        // Must have been fetched from factory (exists in marketAddresses)
+        // Market is valid (from events or factory)
         return true;
       });
       

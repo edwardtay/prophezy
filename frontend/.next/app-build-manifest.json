@@ -1,10 +1,5 @@
 {
   "pages": {
-    "/page": [
-      "static/chunks/webpack.js",
-      "static/chunks/main-app.js",
-      "static/chunks/app/page.js"
-    ],
     "/layout": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
@@ -16,15 +11,20 @@
       "static/chunks/main-app.js",
       "static/chunks/app/create/page.js"
     ],
-    "/dashboard/page": [
+    "/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
-      "static/chunks/app/dashboard/page.js"
+      "static/chunks/app/page.js"
     ],
     "/market/[address]/page": [
       "static/chunks/webpack.js",
       "static/chunks/main-app.js",
       "static/chunks/app/market/[address]/page.js"
+    ],
+    "/dashboard/page": [
+      "static/chunks/webpack.js",
+      "static/chunks/main-app.js",
+      "static/chunks/app/dashboard/page.js"
     ],
     "/not-found": [
       "static/chunks/webpack.js",

@@ -32,7 +32,7 @@ export default function MarketPage() {
           let backendMarketData: any = null;
           if (!marketId) {
             try {
-              const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+              const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
               const backendMarkets = await axios.get(`${API_URL}/api/markets`);
               backendMarketData = backendMarkets.data.find(
                 (m: any) => m.market_address?.toLowerCase() === marketAddress.toLowerCase()
@@ -46,7 +46,7 @@ export default function MarketPage() {
           } else {
             // Fetch backend market data to get oracle_type
             try {
-              const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+              const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3005";
               const backendMarkets = await axios.get(`${API_URL}/api/markets`);
               backendMarketData = backendMarkets.data.find(
                 (m: any) => m.market_address?.toLowerCase() === marketAddress.toLowerCase() || m.market_id === marketId
@@ -65,6 +65,7 @@ export default function MarketPage() {
             oracle_type: backendMarketData?.oracle_type || undefined,
             oracle_name: backendMarketData?.oracle_name || undefined,
             oracle_resolution_time: backendMarketData?.oracle_resolution_time || undefined,
+            imageUrl: market.imageUrl || backendMarketData?.image_url || backendMarketData?.imageUrl || undefined,
           };
           setMarketRow(row);
         } else if (!loading) {

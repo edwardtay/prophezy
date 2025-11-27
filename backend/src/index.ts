@@ -9,13 +9,13 @@ import { db } from "./db";
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || process.env.BACKEND_PORT || 3001;
+const PORT = process.env.PORT || process.env.BACKEND_PORT || 3005;
 
 // CORS configuration - allow Vercel and localhost
 app.use(cors({
   origin: process.env.CORS_ORIGIN 
     ? process.env.CORS_ORIGIN.split(',')
-    : ['http://localhost:3000', 'https://localhost:3000'],
+    : ['http://localhost:3000', 'https://localhost:3000', 'http://localhost:3005'],
   credentials: true,
 }));
 app.use(express.json());

@@ -14,14 +14,15 @@ export function Providers({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-    // Force HTTPS redirect if on HTTP
-    if (typeof window !== 'undefined' && window.location.protocol === 'http:') {
-      console.warn('⚠️ Redirecting to HTTPS for Privy...');
-      window.location.href = window.location.href.replace('http:', 'https:');
-      setIsHttps(false);
-      return;
+    // Allow HTTP on localhost for local development - NO REDIRECTS
+    if (typeof window !== 'undefined') {
+      const isLocalhost = window.location.hostname === 'localhost' || 
+                         window.location.hostname === '127.0.0.1';
+      
+      // Never redirect on localhost - allow HTTP
+      // Only check HTTPS status, don't force redirect
+      setIsHttps(window.location.protocol === 'https:' || isLocalhost);
     }
-    setIsHttps(true);
   }, []);
 
   // Only use Privy if app ID is configured AND we're on HTTPS

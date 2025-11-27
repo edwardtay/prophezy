@@ -34,16 +34,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <head>
-        {/* Force HTTPS redirect before any scripts load */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              if (window.location.protocol === 'http:' && window.location.hostname === 'localhost') {
-                window.location.replace(window.location.href.replace('http:', 'https:'));
-              }
-            `,
-          }}
-        />
+        {/* No HTTPS redirects - allow HTTP on localhost */}
       </head>
       <body className={`${inter.className} ${caveat.variable}`}>
         <Providers>{children}</Providers>
